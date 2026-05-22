@@ -1,4 +1,4 @@
-# tradovate-console
+# copyengine
 
 A multi-account futures trading dashboard for Tradovate, with a real-time risk engine, position oversight across accounts, and a unified control panel.
 
