@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────────────────┐         ┌──────────────────────────────────┐
-│   Next.js 16 web (apps/web) │         │   Copier engine (apps/engine)    │
+│   Next.js 16 web (apps/web) │         │   Trading engine (apps/engine)   │
 │                             │   SSE   │                                  │
 │  - shadcn dashboard         │ ◄────── │  - WS to Tradovate (1 + N)       │
 │  - control API (POST)       │ ──────► │  - risk engine                   │
@@ -35,9 +35,9 @@ So:
 ## Process responsibilities
 
 ### `apps/engine`
-- Opens one Tradovate WS session per configured account (master + followers)
+- Opens one Tradovate WS session per configured account (primary + linked)
 - Maintains in-memory `Book` per account: open positions, working orders, today's realized P&L
-- On master fill → builds follower orders → runs risk engine → submits in parallel
+- On primary fill → builds linked-account orders → runs risk engine → submits in parallel
 - Persists every order + fill + risk event to Postgres for audit
 - Exposes `/sse/state` (live), `/api/control/{kill,pause,resume,config}` (commands), `/healthz`
 - Reconnect loop with state reconciliation on restart
@@ -49,32 +49,32 @@ So:
 - Auth: simple email-magic-link via Resend (single-user for v0; multi-user later)
 - All control actions go through Server Actions → engine HTTP
 
-## Data flow: a single trade copy
+## Data flow: a single propagated trade
 
 ```
-Master fills 2 ES @ 4523.50
+Primary fills 2 ES @ 4523.50
       │
       ▼
   [engine] WS fill event received  (t = 0 ms)
       │
       ▼
-  resolve followers active for this master + symbol
+  resolve linked accounts active for this primary + symbol
       │
       ▼
-  for each follower:
+  for each linked account:
      map symbol (ES → MES if configured)         ← 0.1 ms
      compute size (multiplier / fixed / %eq)     ← 0.1 ms
      risk gate (DD, max contracts, news, kill)   ← 0.5 ms
      submit order via Tradovate REST             ← network ~30–80 ms
       │
       ▼
-  fills come back on follower WS                 ← ~50–120 ms after submit
+  fills come back on linked-account WS           ← ~50–120 ms after submit
       │
       ▼
   persist + emit SSE event to dashboard
 ```
 
-Target: master fill → all follower submissions in flight within **20 ms** of master fill event. End-to-end fill confirmation: **<150 ms** on Chicago VPS.
+Target: primary fill → all linked-account submissions in flight within **20 ms** of the primary fill event. End-to-end fill confirmation: **<150 ms** on Chicago VPS.
 
 ## Risk engine
 
@@ -105,5 +105,5 @@ The risk engine runs **inline** in the engine process — never as a separate mi
 ## Open questions (resolve before Phase 1 starts)
 
 - Does Tradovate REST + WS satisfy <150 ms for both order submit and fill notification? Need to benchmark from Chicago VPS before locking design.
-- Tradovate API rate limits across N followers — confirm whether per-account or per-app.
+- Tradovate API rate limits across N linked accounts — confirm whether per-account or per-app.
 - Tradovate OAuth flow for multi-account auth: one user with N accounts vs N user logins?

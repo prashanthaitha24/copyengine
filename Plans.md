@@ -1,18 +1,18 @@
 # Plans.md
 
-> Phase 1: **Tradovate → Tradovate copier, single-user, 1 master + up to 5 followers, with risk engine and live dashboard.**
+> Phase 1: **Tradovate multi-account dashboard, single-user, 1 primary + up to 5 linked accounts, with risk engine and live dashboard.**
 > Target: 4–6 weeks of focused work in build-for-me mode. "Done" = paper-traded for 5 sessions without an order routing failure or risk-engine miss.
 
 ## Acceptance criteria (Phase 1)
 
-A trade fired on the master Tradovate demo account is:
-1. Mirrored to all active followers with correct symbol mapping and sizing
+A trade fired on the primary Tradovate demo account is:
+1. Propagated to all active linked accounts with correct symbol mapping and sizing
 2. Blocked correctly by every risk rule (verified by unit + integration tests)
-3. Visible in the dashboard within 1 s of the fill, with master vs follower diff
+3. Visible in the dashboard within 1 s of the fill, with primary vs linked-account diff
 4. Reconciled correctly on engine restart (no duplicated, no missed orders)
 5. Killable instantly via the dashboard panic button (all positions flat within 2 s)
 
-End-to-end latency target: **<150 ms** master fill → follower fill confirmation on a Chicago-region VPS.
+End-to-end latency target: **<150 ms** primary fill → linked-account fill confirmation on a Chicago-region VPS.
 
 ---
 
@@ -30,7 +30,7 @@ End-to-end latency target: **<150 ms** master fill → follower fill confirmatio
 - [ ] **T07** WS session manager: one persistent session per account, auto-reconnect with exponential backoff, heartbeat monitor
 - [ ] **T08** Parse Tradovate events into typed `MarketEvent` / `OrderEvent` / `FillEvent`
 - [ ] **T09** REST order submit wrapper (market, limit, stop, OCO bracket)
-- [ ] **T10** Latency telemetry: every order tagged with t0 (master fill), t1 (submit sent), t2 (follower fill) → persisted
+- [ ] **T10** Latency telemetry: every order tagged with t0 (primary fill), t1 (submit sent), t2 (linked-account fill) → persisted
 
 ### M2 — Risk engine (week 3)
 - [ ] **T11** In-memory `Book` per account (positions, working orders, realized P&L today)
@@ -39,12 +39,12 @@ End-to-end latency target: **<150 ms** master fill → follower fill confirmatio
 - [ ] **T14** Risk evaluation order: kill → account → order. Persist every block to `risk_events`.
 - [ ] **T15** Kill switch: HTTP endpoint, in-memory flag, also persisted so it survives restart
 
-### M3 — Copy logic (week 4)
-- [ ] **T16** Master fill subscriber → fan-out to followers
-- [ ] **T17** Per-follower sizing: fixed lots, multiplier, %-equity (with half-Kelly cap of 2%)
-- [ ] **T18** Symbol mapping resolver (ES → MES, NQ → MNQ, etc.) per follower
-- [ ] **T19** Bracket order replication: SL + TP attached at master mirror to followers
-- [ ] **T20** Trailing stop logic (server-side on master if Tradovate doesn't support; mirrored)
+### M3 — Order propagation (week 4)
+- [ ] **T16** Primary-account fill subscriber → fan-out to linked accounts
+- [ ] **T17** Per-account sizing: fixed lots, multiplier, %-equity (with half-Kelly cap of 2%)
+- [ ] **T18** Symbol mapping resolver (ES → MES, NQ → MNQ, etc.) per linked account
+- [ ] **T19** Bracket order propagation: SL + TP attached at primary propagate to linked accounts
+- [ ] **T20** Trailing stop logic (server-side on primary if Tradovate doesn't support; propagated)
 - [ ] **T21** Position reconciliation on engine restart: read open positions from Tradovate, replay/diff against DB
 
 ### M4 — Dashboard (week 5)
@@ -52,16 +52,16 @@ End-to-end latency target: **<150 ms** master fill → follower fill confirmatio
 - [ ] **T23** Per-account on/off toggle (writes to engine via Server Action → control API)
 - [ ] **T24** Panic button (red, confirms with type-to-confirm). Wired to engine kill endpoint.
 - [ ] **T25** Live event feed (SSE) — orders, fills, risk blocks, errors
-- [ ] **T26** `/journal` — per-day fill list with master vs follower diff (price slippage, fill time delta, lot delta)
+- [ ] **T26** `/journal` — per-day fill list with primary vs linked-account diff (price slippage, fill time delta, lot delta)
 - [ ] **T27** `/accounts` `/mappings` `/risk-rules` CRUD pages
 - [ ] **T28** Auth: email magic link (Resend), single-user for v0
 
 ### M5 — Hardening + paper test (week 6)
-- [ ] **T29** End-to-end test harness: scripted Tradovate demo orders → assert mirror + journal output
+- [ ] **T29** End-to-end test harness: scripted Tradovate demo orders → assert propagation + journal output
 - [ ] **T30** Latency budget verification: 95th percentile fill→submit <20 ms on Chicago VPS
-- [ ] **T31** Chaos tests: WS disconnect mid-fill, DB unavailable, follower account rejected order
+- [ ] **T31** Chaos tests: WS disconnect mid-fill, DB unavailable, linked account rejected order
 - [ ] **T32** Deploy: engine to Chicago VPS, web to Vercel, Neon Postgres
-- [ ] **T33** Paper-trade 5 full RTH sessions with master on real demo + 2 followers. Zero routing failures, zero risk-engine misses required to declare Phase 1 done.
+- [ ] **T33** Paper-trade 5 full RTH sessions with primary on real demo + 2 linked accounts. Zero routing failures, zero risk-engine misses required to declare Phase 1 done.
 
 ---
 
@@ -69,23 +69,20 @@ End-to-end latency target: **<150 ms** master fill → follower fill confirmatio
 
 | Risk | Mitigation |
 |---|---|
-| Tradovate API rate limits across N followers | Benchmark in M1; if hit, parallelize with bounded concurrency + backoff |
+| Tradovate API rate limits across N accounts | Benchmark in M1; if hit, parallelize with bounded concurrency + backoff |
 | Latency >150 ms | If exceeded, profile in M5; engine→Tradovate proximity is the lever, not code |
-| Prop firm ToS forbids copying | Document ToS check per supported prop firm in `/docs/prop-firm-tos.md` before Phase 1 done. Block usage flag if ToS unclear. |
 | Lost fills on reconnect | T21 is the gate; if reconciliation isn't bulletproof, Phase 1 is not done |
 | Risk engine bug → blown account | T13 unit tests + 5 paper sessions in T33 before any live capital |
 
 ## Out of scope for Phase 1
 
-- NinjaTrader source (Phase 2)
-- Rithmic destinations (Phase 3)
+- Additional broker APIs (later phases)
 - Multi-tenant / multi-user (later)
 - Mobile/tablet view (later)
-- Trade Copier marketplace listing (way later)
-- News API integration — Phase 1 ships with manual news-window config; auto-pause on economic events is Phase 2
+- News API integration — Phase 1 ships with manual news-window config; auto-pause on economic events is later
 
-## Phase 2+ teaser
+## Later-phase teaser
 
-- Phase 2: NT8 source via Windows bridge + auto news pause + per-follower custom risk overlays
-- Phase 3: Rithmic destinations (gated on R|API license)
-- Phase 4: Multi-tenant SaaS if we decide to sell it
+- Additional broker APIs and source/destination flexibility
+- Auto news-pause + per-account custom risk overlays
+- Multi-tenant SaaS if we decide to productize it

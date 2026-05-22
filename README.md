@@ -1,31 +1,30 @@
-# tradovate-copier
+# tradovate-console
 
-A low-latency trade copier for Tradovate-backed prop firm accounts, with a built-in risk engine and a real-time multi-account dashboard.
+A multi-account futures trading dashboard for Tradovate, with a real-time risk engine, position oversight across accounts, and a unified control panel.
 
-> Phase 1 scope: **Tradovate → Tradovate only**. NinjaTrader and Rithmic destinations land in later phases.
+> Phase 1: Tradovate API only. Additional broker APIs come in later phases.
 
 ## Why
 
-Most off-the-shelf copiers are either Windows-only, locked to NinjaTrader, or slow enough that ES/NQ slippage eats the edge. This one targets:
+Managing several Tradovate accounts from the native UI means juggling browser tabs, missing risk signals, and reconciling P&L by hand. This dashboard targets:
 
-- **<150 ms master → follower fill latency** on the same Chicago-region VPS
+- **<150 ms event-to-action loop** on a Chicago-region VPS, co-located with CME
 - **Hard risk enforcement** before any order leaves the box (daily DD, trailing DD, max contracts, news pause, kill switch)
 - **A UI you actually want to look at** — not a 2008 WinForms grid
 
 ## Features (target)
 
-### Copier core
-- One **master** account, N **follower** accounts
-- Per-follower sizing: fixed lots, lot multiplier, or `% equity` Kelly-capped
-- Symbol mapping: `ES → MES`, `NQ → MNQ`, configurable per follower
+### Account oversight
+- One primary account + N linked accounts under a single dashboard
+- Per-account configuration: position sizing rules, symbol substitutions (`ES ↔ MES`), order-type preferences
 - Order types covered: market, limit, stop, stop-limit, OCO brackets
-- Stop loss + trailing stop attached at master (mirrored to followers) or attached locally per follower
-- Position reconciliation on reconnect / replay of missed fills
-- Per-follower latency monitor + fill comparison view
+- Stop loss + trailing stop management with per-account overrides
+- Position reconciliation on reconnect
+- Per-account latency monitor and execution diagnostics
 
-### Risk engine (fires before order leaves the process)
+### Risk engine (fires before any order leaves the process)
 - Daily drawdown ceiling
-- Trailing drawdown ceiling (prop firm rules)
+- Trailing drawdown ceiling
 - Max open contracts (per account, per symbol)
 - Max contracts per order
 - News-window pause (configurable economic event list)
@@ -36,19 +35,19 @@ Most off-the-shelf copiers are either Windows-only, locked to NinjaTrader, or sl
 - Multi-account dashboard: live P&L, open positions, today's fills
 - Per-account on/off toggle
 - Real-time event log (orders sent, fills, errors, risk blocks)
-- Trade journal with fill-by-fill master vs follower diff
+- Per-day trade journal across accounts
 - Encrypted credential vault (no plaintext API keys on disk)
 - Light + dark theme
 
 ## Architecture (one-liner)
 
-A long-running Node/TS **engine** process holds WebSocket sessions to Tradovate for master and every follower, runs the risk engine inline, and persists state to Postgres. A Next.js 16 **web** app reads live state via Server-Sent Events and posts control commands (kill, pause, config) back to the engine over a local API.
+A long-running Node/TS **engine** process holds WebSocket sessions to Tradovate for every configured account, runs the risk engine inline, and persists state to Postgres. A Next.js 16 **web** app reads live state via Server-Sent Events and posts control commands (kill, pause, config) back to the engine.
 
-Full design: [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+Full design: [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Status
 
-**Pre-alpha.** Nothing here trades real money yet. See [`Plans.md`](./Plans.md) for the Phase 1 build plan.
+**Pre-alpha.** Nothing here trades real money yet. See [Plans.md](./Plans.md) for the Phase 1 build plan.
 
 ## License
 

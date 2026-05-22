@@ -1,8 +1,8 @@
-# CLAUDE.md — tradovate-copier conventions
+# CLAUDE.md — project conventions
 
 ## What this project is
 
-A low-latency Tradovate trade copier with a built-in risk engine and a Next.js dashboard. See `README.md`, `ARCHITECTURE.md`, `Plans.md`.
+A multi-account Tradovate dashboard with a built-in risk engine and live order propagation across accounts. See `README.md`, `ARCHITECTURE.md`, `Plans.md`.
 
 ## Repo layout
 
@@ -14,20 +14,18 @@ packages/
   shared/   Shared TS types: Order, Fill, RiskRule, Account, Mapping, etc.
 infra/
   db/       Prisma schema + migrations
-docs/
-  prop-firm-tos.md  ToS notes per supported prop firm
 ```
 
 (Subfolders created on demand — repo starts with docs only.)
 
 ## Build principles
 
-- **Risk engine before copy logic.** Never wire a copier path without the risk gate already in place.
-- **Latency is a feature.** Any change that adds >5 ms to the master-fill → submit hot path needs justification in the PR.
+- **Risk engine before order routing.** Never wire a propagation path without the risk gate already in place.
+- **Latency is a feature.** Any change that adds >5 ms to the fill → submit hot path needs justification in the PR.
 - **No plaintext credentials on disk, ever.** All Tradovate API tokens are envelope-encrypted with libsodium. Decrypted in engine memory only.
 - **Persist everything for audit.** Orders, fills, risk blocks, kill events, config changes — all in Postgres with timestamps.
 - **PR-for-every-change.** No commits straight to `main`. Even a typo fix goes through a PR.
-- **Demo-grade UI bar.** shadcn components, light + dark theme, real data (no Lorem placeholders). React Flow only if/when we need a graph view of master→follower routing.
+- **Demo-grade UI bar.** shadcn components, light + dark theme, real data (no Lorem placeholders). React Flow only if/when we need a graph view of cross-account routing.
 
 ## Stack rules
 
@@ -50,7 +48,7 @@ docs/
 A task is not done until:
 - Code is committed via PR
 - Tests pass locally
-- For copier-path changes: tested end-to-end against Tradovate demo
+- For order-path changes: tested end-to-end against Tradovate demo
 - For UI changes: verified in browser, light + dark, no console errors
 
 ## What we don't do
